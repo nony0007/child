@@ -37,8 +37,8 @@
     <button id="overlayBtn">Continue</button>
   </div>
 
-  <div id="modalHelp" class="modal hidden">
-    <div class="card">
+  <div id="modalHelp" class="modal hidden" aria-hidden="true">
+    <div class="card" role="dialog" aria-modal="true">
       <h2>How to Play</h2>
       <p>
         You start in a random place. Every 2 minutes the world switches from Day to Night.<br/>
@@ -46,7 +46,7 @@
         Gather <em>wood</em> from trees and <em>stone</em> from rocks. Craft a <strong>shovel</strong> to dig underground.
       </p>
       <p>
-        Find and complete the three mini‑games at the glowing shrines to earn <strong>sigils</strong>.
+        Find and complete the three mini-games at the glowing shrines to earn <strong>sigils</strong>.
         Dig to discover the <strong>underground chamber</strong>. You need all 3 sigils to unlock the child.
       </p>
       <p>
@@ -60,7 +60,7 @@
         <li>Pause = P (or Pause button)</li>
       </ul>
       <p>Nights limit: <strong>99</strong>. If you reach night 100 without rescuing, it's Game Over.</p>
-      <button id="closeHelp">Close</button>
+      <button id="closeHelp" type="button">Close</button>
     </div>
   </div>
 
