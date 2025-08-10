@@ -2,9 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+  <meta http-equiv="Pragma" content="no-cache"/>
+  <meta http-equiv="Expires" content="0"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Family Rescue: 99 Nights</title>
-  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="style-v3.css"/>
 </head>
 <body>
   <div id="ui">
@@ -37,33 +40,6 @@
     <button id="overlayBtn">Continue</button>
   </div>
 
-  <div id="modalHelp" class="modal hidden" aria-hidden="true">
-    <div class="card" role="dialog" aria-modal="true">
-      <h2>How to Play</h2>
-      <p>
-        You start in a random place. Every 2 minutes the world switches from Day to Night.<br/>
-        At <strong>Night</strong>, creatures roam. Touching one means <strong>GAME OVER</strong>. Don't go outside!<br/>
-        Gather <em>wood</em> from trees and <em>stone</em> from rocks. Craft a <strong>shovel</strong> to dig underground.
-      </p>
-      <p>
-        Find and complete the three mini-games at the glowing shrines to earn <strong>sigils</strong>.
-        Dig to discover the <strong>underground chamber</strong>. You need all 3 sigils to unlock the child.
-      </p>
-      <p>
-        After rescuing the child, craft the <strong>House Frame</strong> (wood 20 + stone 10), place it,
-        and complete your home. Then it says <strong>THE END</strong>.
-      </p>
-      <h3>Controls</h3>
-      <ul>
-        <li>Player 1: Move = WASD, Interact/Use = E, Dig = F, Open Craft = C</li>
-        <li>Player 2: Move = Arrow Keys, Interact/Use = Right Shift, Dig = Right Ctrl</li>
-        <li>Pause = P (or Pause button)</li>
-      </ul>
-      <p>Nights limit: <strong>99</strong>. If you reach night 100 without rescuing, it's Game Over.</p>
-      <button id="closeHelp" type="button">Close</button>
-    </div>
-  </div>
-
-  <script src="main.js"></script>
+  <script src="main-v3.js"></script>
 </body>
 </html>
