@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Family Rescue: 99 Nights</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+  <div id="ui">
+    <div class="row">
+      <h1>Family Rescue: 99 Nights</h1>
+      <button id="btnHelp">Help</button>
+      <button id="btnRestart">Restart</button>
+      <button id="btnPause">Pause</button>
+    </div>
+    <div class="row stats">
+      <span id="statDay">Day 1</span>
+      <span id="statTime">Dawn</span>
+      <span id="statNightsLeft">Nights left: 99</span>
+      <span id="statMinigames">Sigils: 0/3</span>
+      <span id="statGoal">Goal: Rescue the child and build a house</span>
+    </div>
+    <div class="row">
+      <div id="inventory"></div>
+      <div id="crafting">
+        <strong>Crafting</strong>
+        <div>Shovel (wood 3 + stone 2) <button data-item="shovel">Craft</button></div>
+        <div>House Frame (wood 20 + stone 10) <button data-item="house">Craft</button></div>
+      </div>
+    </div>
+  </div>
+  <canvas id="game" width="960" height="600"></canvas>
+
+  <div id="overlay" class="hidden">
+    <div id="overlayText"></div>
+    <button id="overlayBtn">Continue</button>
+  </div>
+
+  <div id="modalHelp" class="modal hidden">
+    <div class="card">
+      <h2>How to Play</h2>
+      <p>
+        You start in a random place. Every 2 minutes the world switches from Day to Night.<br/>
+        At <strong>Night</strong>, creatures roam. Touching one means <strong>GAME OVER</strong>. Don't go outside!<br/>
+        Gather <em>wood</em> from trees and <em>stone</em> from rocks. Craft a <strong>shovel</strong> to dig underground.
+      </p>
+      <p>
+        Find and complete the three mini‑games at the glowing shrines to earn <strong>sigils</strong>.
+        Dig to discover the <strong>underground chamber</strong>. You need all 3 sigils to unlock the child.
+      </p>
+      <p>
+        After rescuing the child, craft the <strong>House Frame</strong> (wood 20 + stone 10), place it,
+        and complete your home. Then it says <strong>THE END</strong>.
+      </p>
+      <h3>Controls</h3>
+      <ul>
+        <li>Player 1: Move = WASD, Interact/Use = E, Dig = F, Open Craft = C</li>
+        <li>Player 2: Move = Arrow Keys, Interact/Use = Right Shift, Dig = Right Ctrl</li>
+        <li>Pause = P (or Pause button)</li>
+      </ul>
+      <p>Nights limit: <strong>99</strong>. If you reach night 100 without rescuing, it's Game Over.</p>
+      <button id="closeHelp">Close</button>
+    </div>
+  </div>
+
+  <script src="main.js"></script>
+</body>
+</html>
