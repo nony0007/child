@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
+<title>Family Rescue: 99 Nights — Fresh Build</title>
+<style>
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#0b0d14;color:#e7ecf3;display:flex;flex-direction:column}
+#topbar{display:flex;gap:8px;align-items:center;padding:8px 12px;background:#0f172a;border-bottom:1px solid #1f2a44;flex-wrap:wrap}
+h1{font-size:16px;margin:0 8px 0 0}
+.badge{background:#0f172a;border:1px solid #223047;border-radius:9px;padding:3px 7px}
+button{border:none;padding:6px 10px;border-radius:10px;background:#1e293b;color:#e7ecf3;cursor:pointer}
+button:hover{filter:brightness(1.1)}
+#craft{margin-left:auto;display:flex;gap:10px;align-items:center}
+#inv{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+#inv .item{background:#111827;border:1px solid #334155;padding:3px 7px;border-radius:8px}
+#wrap{flex:1;display:flex;align-items:center;justify-content:center;background:#07090f}
+#game{display:block;width:960px;height:600px;max-width:100%;border:0;image-rendering:pixelated}
+</style>
+</head>
+<body>
+  <div id="topbar">
+    <h1>Family Rescue: 99 Nights</h1>
+    <button id="btnHelp">Help</button>
+    <button id="btnRestart">Restart</button>
+    <button id="btnPause">Pause</button>
+    <span class="badge" id="bDay">Day 1</span>
+    <span class="badge" id="bTime">Dawn</span>
+    <span class="badge" id="bNights">Nights left: 99</span>
+    <span class="badge" id="bSigils">Runes: 0/3</span>
+    <span class="badge" id="bGoal">Goal: Rescue the child & build a house</span>
+    <div id="craft">
+      <span>Craft:</span>
+      <button data-craft="shovel">Shovel (wood3+stone2)</button>
+      <button data-craft="frame">House Frame (wood20+stone10)</button>
+    </div>
+  </div>
+  <div id="wrap"><canvas id="game" width="960" height="600"></canvas></div>
+
+<script>
+(() => {
+  "use strict";
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const TILE = 24, WORLD = 80;
+  const COLS = Math.floor(W/TILE), ROWS = Math.floor(H/TILE);
+  const DAY_MS = 120000, NIGHT_START=0.55, NIGHT_END=0.95, MAX_NIGHTS=99;
+
+  const bDay=document.getElementById('bDay'), bTime=document.getElementById('bTime'), bNights=document.getElementById('bNights'), bSigils=document.getElementById('bSigils');
+
+  // Pure new state
+  let S;
+
+  // Utility
+  const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+  const k=(x,y)=>x+','+y;
+  const rng = (seed => () => (seed = (seed*1664525+1013904223)|0, (seed>>>0)/4294967296))( (Math.random()*1e9)|0 );
+
+  function reset(){
+    S = {
+      start: performance.now(), lastTick: performance.now(), lastPhaseMark: performance.now(),
+      day:1, nights:0, paused:false, running:true, over:false, won:false,
+      p1:{x:(rng()*WORLD)|0, y:(rng()*WORLD)|0}, p2:{x:(rng()*WORLD)|0, y:(rng()*WORLD)|0},
+      inv:{wood:0,stone:0,shovel:0,frame:0,child:0,runes:0,house:0},
+      trees:new Set(), rocks:new Set(), dug:new Set(), enemies:[],
+      runes:[], chamber:null, msg:[], view:1, mini:null,
+    };
+    genWorld();
+    toast("New run: find 3 runes ★, craft a shovel, dig the chamber, rescue the child, build the house.");
+  }
+
+  function phase(){ return ((performance.now()-S.start)%DAY_MS)/DAY_MS; }
+  function isNight(){ const p=phase(); return p>=NIGHT_START && p<=NIGHT_END; }
+  function phaseName(){ const p=phase(); if (p<0.2) return 'Dawn'; if (p<NIGHT_START) return 'Day'; if (p<=NIGHT_END) return 'Night'; return 'Dawn'; }
+
+  function genWorld(){
+    // Populate trees & rocks
+    const dens=0.12;
+    for(let x=0;x<WORLD;x++){
+      for(let y=0;y<WORLD;y++){
+        const r = rng();
+        if (r<dens*0.7) S.trees.add(k(x,y));
+        else if (r<dens) S.rocks.add(k(x,y));
+      }
+    }
+    S.trees.delete(k(S.p1.x,S.p1.y)); S.rocks.delete(k(S.p1.x,S.p1.y));
+    // Place 3 rune shrines
+    for(let i=0;i<3;i++){
+      let x,y;
+      do{ x=(rng()*WORLD)|0; y=(rng()*WORLD)|0; } while(S.trees.has(k(x,y))||S.rocks.has(k(x,y)));
+      S.runes.push({x,y,type:i,done:false});
+    }
+    // Hidden chamber
+    let cx,cy;
+    do{ cx=(rng()*WORLD)|0; cy=(rng()*WORLD)|0; } while(Math.hypot(cx-S.p1.x,cy-S.p1.y)<12);
+    S.chamber={x:cx,y:cy,open:false};
+  }
+
+  function toast(t){ S.msg.push({t,ts:performance.now()}); }
+
+  // Inputs
+  const keys={};
+  addEventListener('keydown',e=>{
+    keys[e.code]=true;
+    if (e.code==='KeyP') S.paused=!S.paused;
+    if (e.code==='KeyR') reset();
+  });
+  addEventListener('keyup',e=>keys[e.code]=false);
+
+  // Top buttons
+  document.getElementById('btnHelp').addEventListener('click',()=>{
+    alert("How to Play:\n- Day/Night every 2 minutes. Avoid outside at night.\n- Chop trees & mine rocks (E) to get wood/stone. Craft shovel to dig (F).\n- Complete 3 rune challenges at ★ to earn runes.\n- Dig to find the chamber and rescue the child (needs 3 runes).\n- Craft a House Frame and interact on clear ground to win.\nControls: P1 WASD/E/F, P2 Arrows/RightShift/RightCtrl. Pause=P, Restart=R.\nLimit: 99 nights.");
+  });
+  document.getElementById('btnRestart').addEventListener('click',reset);
+  document.getElementById('btnPause').addEventListener('click',()=>S.paused=!S.paused);
+  document.getElementById('craft').addEventListener('click',e=>{
+    const b=e.target.closest('button'); if(!b||!b.dataset.craft) return;
+    if (b.dataset.craft==='shovel'){
+      if (S.inv.wood>=3 && S.inv.stone>=2){ S.inv.wood-=3; S.inv.stone-=2; S.inv.shovel++; toast("Crafted a shovel."); }
+      else toast("Need wood3 + stone2.");
+    } else if (b.dataset.craft==='frame'){
+      if (S.inv.wood>=20 && S.inv.stone>=10){ S.inv.wood-=20; S.inv.stone-=10; S.inv.frame++; toast("Crafted a house frame."); }
+      else toast("Need wood20 + stone10.");
+    }
+  });
+
+  // Interact & dig
+  function interact(p){
+    const t=k(p.x,p.y);
+    if (S.trees.has(t)){ S.trees.delete(t); S.inv.wood++; toast("+1 wood"); return; }
+    if (S.rocks.has(t)){ S.rocks.delete(t); S.inv.stone++; toast("+1 stone"); return; }
+    const shr=S.runes.find(s=>s.x===p.x&&s.y===p.y);
+    if (shr){ if (shr.done){ toast("This shrine is quiet."); } else startMini(shr); return; }
+    if (S.chamber.x===p.x && S.chamber.y===p.y){
+      if (!S.chamber.open){
+        if (S.inv.runes>=3){ S.chamber.open=true; S.inv.child=1; toast("You rescued the child! Craft and place a house frame."); }
+        else toast("A sealed chamber. You need 3 runes.");
+      }
+      return;
+    }
+    // Place house if possible
+    if (S.inv.child && S.inv.frame && !S.inv.house){
+      if (S.trees.has(t)||S.rocks.has(t)){ toast("Clear the tile first."); }
+      else { S.inv.frame--; S.inv.house=1; S.won=true; toast("You built a home. THE END ♥"); }
+    }
+  }
+  function dig(p){
+    if (!S.inv.shovel){ toast("You need a shovel to dig."); return; }
+    const t=k(p.x,p.y);
+    if (S.dug.has(t)){ toast("Already dug here."); return; }
+    S.dug.add(t);
+    if (Math.random()<0.1){ S.inv.stone++; toast("You found +1 stone while digging."); }
+    if (S.chamber.x===p.x && S.chamber.y===p.y){ toast("You uncovered an underground chamber entrance."); }
+  }
+
+  // Simple minigames — robust, no DOM, drawn on canvas
+  // 0: Tap-the-order (numbers 1..4 appear, click in order)
+  // 1: Key sequence (show a sequence like WASD, press it)
+  // 2: Timer dodge (avoid moving squares for 5s using your player)
+  function startMini(shrine){
+    if (S.mini) return;
+    if (shrine.type===0){
+      const pts=[];
+      for(let i=0;i<4;i++){ pts.push({x:(Math.random()*W)|0, y:(Math.random()*H)|0, n:i+1}); }
+      S.mini={kind:0, shrine, pts, next:1, fail:false, done:false};
+    } else if (shrine.type===1){
+      const seq=['KeyW','KeyA','KeyS','KeyD']; // fixed for simplicity
+      S.mini={kind:1, shrine, seq, idx:0, fail:false, done:false};
+    } else {
+      const obstacles=[]; for(let i=0;i<6;i++){ obstacles.push({x:(Math.random()*W)|0, y:(Math.random()*H)|0, vx:(Math.random()<0.5?-2:2), vy:(Math.random()<0.5?-2:2)}); }
+      const t0=performance.now();
+      S.mini={kind:2, shrine, obstacles, t0, dur:5000, done:false, fail:false};
+    }
+  }
+
+  canvas.addEventListener('mousedown',e=>{
+    if (!S.mini) return;
+    const r=canvas.getBoundingClientRect(), mx=e.clientX-r.left, my=e.clientY-r.top;
+    if (S.mini.kind===0){
+      const hit=S.mini.pts.find(p=>Math.hypot(mx-p.x,my-p.y)<18 && p.n===S.mini.next);
+      if (hit){ S.mini.next++; }
+      else { S.mini.fail=true; }
+      if (S.mini.next>4){ S.mini.done=true; }
+    }
+  });
+  addEventListener('keydown',e=>{
+    if (!S.mini) return;
+    if (S.mini.kind===1){
+      if (e.code===S.mini.seq[S.mini.idx]) S.mini.idx++;
+      else S.mini.fail=true;
+      if (S.mini.idx>=S.mini.seq.length) S.mini.done=true;
+    }
+  });
+
+  function resolveMini(){
+    if (!S.mini) return;
+    const M=S.mini;
+    if (M.done && !M.fail){ M.shrine.done=true; S.inv.runes++; toast("Rune gained! ("+S.inv.runes+"/3)"); S.mini=null; }
+    else if (M.fail){ toast("Challenge failed. Try again later."); S.mini=null; }
+  }
+
+  // Movement & update
+  function update(dt){
+    if (!S.running || S.paused) return;
+
+    // Day/Night bookkeeping
+    const prev=((S.lastPhaseMark-S.start)%DAY_MS)/DAY_MS;
+    const cur=((performance.now()-S.start)%DAY_MS)/DAY_MS;
+    const nightNow = cur>=NIGHT_START && cur<=NIGHT_END;
+    const nightBefore = prev>=NIGHT_START && prev<=NIGHT_END;
+    if (!nightBefore && nightNow){ S.nights++; if (S.nights>MAX_NIGHTS){ S.over=true; S.running=false; } }
+    if (prev<=NIGHT_END && cur>NIGHT_END){ S.day++; }
+    S.lastPhaseMark=performance.now();
+
+    // Player motion
+    const p1=S.p1, p2=S.p2;
+    if (keys['KeyW']) p1.y=clamp(p1.y-1,0,WORLD-1);
+    if (keys['KeyS']) p1.y=clamp(p1.y+1,0,WORLD-1);
+    if (keys['KeyA']) p1.x=clamp(p1.x-1,0,WORLD-1);
+    if (keys['KeyD']) p1.x=clamp(p1.x+1,0,WORLD-1);
+    if (keys['ArrowUp']) p2.y=clamp(p2.y-1,0,WORLD-1);
+    if (keys['ArrowDown']) p2.y=clamp(p2.y+1,0,WORLD-1);
+    if (keys['ArrowLeft']) p2.x=clamp(p2.x-1,0,WORLD-1);
+    if (keys['ArrowRight']) p2.x=clamp(p2.x+1,0,WORLD-1);
+
+    if (keys['KeyE']){ interact(p1); keys['KeyE']=false; }
+    if (keys['ShiftRight']){ interact(p2); keys['ShiftRight']=false; }
+    if (keys['KeyF']){ dig(p1); keys['KeyF']=false; }
+    if (keys['ControlRight']){ dig(p2); keys['ControlRight']=false; }
+
+    // Enemies only at night
+    if (isNight()){
+      if (S.enemies.length<8 && Math.random()<0.03){ S.enemies.push({x:(Math.random()*WORLD)|0,y:(Math.random()*WORLD)|0}); }
+      for(const e of S.enemies){
+        const target = (Math.hypot(e.x-p1.x,e.y-p1.y) < Math.hypot(e.x-p2.x,e.y-p2.y)) ? p1 : p2;
+        e.x += Math.sign(target.x-e.x)*(Math.random()<0.7?1:0);
+        e.y += Math.sign(target.y-e.y)*(Math.random()<0.7?1:0);
+        e.x=clamp(e.x,0,WORLD-1); e.y=clamp(e.y,0,WORLD-1);
+        if (!S.over && ( (e.x===p1.x&&e.y===p1.y) || (e.x===p2.x&&e.y===p2.y) )){ S.over=true; S.running=false; S.endMsg="You were slain by a night creature."; }
+      }
+    } else if (S.enemies.length && Math.random()<0.05){ S.enemies.pop(); }
+
+    // Minigame kind 2 (dodge)
+    if (S.mini && S.mini.kind===2){
+      const M=S.mini;
+      for(const o of M.obstacles){
+        o.x+=o.vx; o.y+=o.vy;
+        if (o.x<10||o.x>W-10) o.vx*=-1;
+        if (o.y<80||o.y>H-10) o.vy*=-1;
+        // collide with follow player (p1)
+        const gx=(S.p1.x - camX())*TILE + TILE/2;
+        const gy=(S.p1.y - camY())*TILE + TILE/2;
+        if (Math.hypot(gx-o.x, gy-o.y)<18) M.fail=true;
+      }
+      if (performance.now()-M.t0 > M.dur) M.done=true;
+    }
+
+    // UI badges
+    bDay.textContent = "Day "+S.day;
+    bTime.textContent = phaseName();
+    bNights.textContent = "Nights left: "+Math.max(0, MAX_NIGHTS-S.nights);
+    bSigils.textContent = "Runes: "+S.inv.runes+"/3";
+  }
+
+  function camX(){ const f=S.view===1?S.p1:S.p2; return clamp(f.x - Math.floor(COLS/2),0,Math.max(0,WORLD-COLS)); }
+  function camY(){ const f=S.view===1?S.p1:S.p2; return clamp(f.y - Math.floor(ROWS/2),0,Math.max(0,WORLD-ROWS)); }
+
+  canvas.addEventListener('contextmenu',e=>{ e.preventDefault(); S.view = (S.view===1?2:1); });
+
+  function draw(){
+    const cX=camX(), cY=camY();
+    const night=isNight();
+    ctx.fillStyle = night ? '#02030a' : '#0b3315';
+    ctx.fillRect(0,0,W,H);
+
+    // World tiles
+    for(let gx=0;gx<COLS;gx++){
+      for(let gy=0;gy<ROWS;gy++){
+        const wx=cX+gx, wy=cY+gy, x=gx*TILE, y=gy*TILE;
+        const t=k(wx,wy);
+        ctx.fillStyle = night ? '#0a1f0e' : '#184b22';
+        ctx.fillRect(x,y,TILE,TILE);
+        if (S.dug.has(t)){ ctx.fillStyle='#3a2f25'; ctx.fillRect(x,y,TILE,TILE); }
+        if (S.trees.has(t)){ ctx.fillStyle='#14532d'; ctx.fillRect(x+4,y+4,TILE-8,TILE-8); }
+        if (S.rocks.has(t)){ ctx.fillStyle='#64748b'; ctx.fillRect(x+6,y+6,TILE-12,TILE-12); }
+        const shrine=S.runes.find(s=>s.x===wx&&s.y===wy);
+        if (shrine){ ctx.fillStyle= shrine.done ? '#22c55e' : '#fbbf24'; ctx.fillRect(x+3,y+3,TILE-6,TILE-6); ctx.fillStyle='#111827'; ctx.fillText('★', x+7, y+18); }
+        if (S.chamber.x===wx && S.chamber.y===wy){ ctx.strokeStyle='#a78bfa'; ctx.strokeRect(x+2,y+2,TILE-4,TILE-4); ctx.fillStyle='#c4b5fd'; ctx.fillText('⛓', x+6, y+18); }
+      }
+    }
+
+    // Enemies
+    for(const e of S.enemies){
+      const gx=e.x-cX, gy=e.y-cY;
+      if (gx>=0&&gy>=0&&gx<COLS&&gy<ROWS){ ctx.fillStyle='#ef4444'; ctx.fillRect(gx*TILE+4, gy*TILE+4, TILE-8, TILE-8); }
+    }
+
+    // Players
+    const drawP=(p,color)=>{ const gx=p.x-cX, gy=p.y-cY; ctx.fillStyle=color; ctx.fillRect(gx*TILE+3, gy*TILE+3, TILE-6, TILE-6); };
+    drawP(S.p1, '#93c5fd'); drawP(S.p2, '#fda4af');
+
+    // Messages
+    let y=H-6;
+    for (let i=S.msg.length-1;i>=0;i--){
+      const m=S.msg[i], age=performance.now()-m.ts;
+      if (age>4000){ S.msg.splice(i,1); continue; }
+      ctx.fillStyle='rgba(0,0,0,.45)'; ctx.fillRect(8,y-18, W-16, 18);
+      ctx.fillStyle='#e5e7eb'; ctx.fillText(m.t, 16, y-4);
+      y-=20;
+    }
+
+    // Minigame drawings
+    if (S.mini){
+      ctx.fillStyle='rgba(0,0,0,.5)'; ctx.fillRect(0,0,W,H);
+      ctx.fillStyle='#e5e7eb'; ctx.font='16px system-ui,Segoe UI,Roboto,Arial';
+      if (S.mini.kind===0){
+        ctx.fillText('Click the numbers in order: 1 → 4', 20, 40);
+        for(const p of S.mini.pts){
+          ctx.beginPath(); ctx.arc(p.x,p.y,18,0,Math.PI*2); ctx.fillStyle='#60a5fa'; ctx.fill();
+          ctx.fillStyle='#0b0d14'; ctx.fillText(String(p.n), p.x-4, p.y+5);
+        }
+        if (S.mini.done || S.mini.fail) resolveMini();
+      } else if (S.mini.kind===1){
+        ctx.fillText('Press the sequence: W A S D', 20, 40);
+        ctx.fillText('Progress: '+S.mini.idx+'/4', 20, 60);
+        if (S.mini.done || S.mini.fail) resolveMini();
+      } else if (S.mini.kind===2){
+        ctx.fillText('Dodge the squares for 5 seconds (move Player 1)', 20, 40);
+        for(const o of S.mini.obstacles){ ctx.fillStyle='#f59e0b'; ctx.fillRect(o.x-10,o.y-10,20,20); }
+        ctx.fillText('Time: '+ Math.max(0, ((S.mini.dur - (performance.now()-S.mini.t0))/1000)|0 )+'s', 20, 60);
+        if (S.mini.done || S.mini.fail) resolveMini();
+      }
+    }
+
+    // Win/Lose
+    if (S.won){
+      ctx.fillStyle='rgba(0,0,0,.7)'; ctx.fillRect(0,0,W,H);
+      ctx.fillStyle='#fff7ed'; ctx.font='bold 64px system-ui,Segoe UI,Roboto,Arial';
+      const m=ctx.measureText('THE END'); ctx.fillText('THE END', (W-m.width)/2, H/2);
+      ctx.font='18px system-ui,Segoe UI,Roboto,Arial'; const t='Press R to Restart'; const m2=ctx.measureText(t); ctx.fillText(t,(W-m2.width)/2, H/2+38);
+    }
+    if (S.over && !S.won){
+      ctx.fillStyle='rgba(0,0,0,.75)'; ctx.fillRect(0,0,W,H);
+      ctx.fillStyle='#ef4444'; ctx.font='bold 58px system-ui,Segoe UI,Roboto,Arial';
+      const o='GAME OVER'; let m=ctx.measureText(o); ctx.fillText(o,(W-m.width)/2, H/2-16);
+      ctx.fillStyle='#e5e7eb'; ctx.font='18px system-ui,Segoe UI,Roboto,Arial';
+      const t=(S.endMsg||''); m=ctx.measureText(t); ctx.fillText(t,(W-m.width)/2, H/2+12);
+      const hint='Press R to Restart'; m=ctx.measureText(hint); ctx.fillText(hint,(W-m.width)/2, H/2+36);
+    }
+
+    if (night){ ctx.fillStyle='rgba(0,0,0,.35)'; ctx.fillRect(0,0,W,H); }
+  }
+
+  let last=performance.now();
+  function loop(ts){
+    const dt=ts-last; last=ts;
+    if (!S.paused) update(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  reset();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
